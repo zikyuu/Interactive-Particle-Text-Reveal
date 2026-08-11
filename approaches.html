@@ -1,0 +1,780 @@
+<meta charset="utf-8">
+<title>Particle Name Reveal — Two Approaches</title>
+<style>
+  :root{
+    --bg:#f4f2ea;
+    --surface:#ffffff;
+    --surface-2:#faf7f0;
+    --ink:#2a2e36;
+    --ink-dim:#6b6459;
+    --accent:#a3702f;
+    --accent-soft:#c9a874;
+    --line:#e2ddd0;
+    --dust:#8f8a7c;
+    --code-bg:#2a2e36;
+    --code-ink:#e9e6da;
+    --good:#4a7c59;
+    --bad:#a3452f;
+  }
+  :root[data-theme="dark"]{
+    --bg:#0a0d12;
+    --surface:#12151c;
+    --surface-2:#161a22;
+    --ink:#e9e6da;
+    --ink-dim:#9aa0ab;
+    --accent:#e0b675;
+    --accent-soft:#8a6f45;
+    --line:#232833;
+    --dust:#5c6472;
+    --code-bg:#0a0d12;
+    --code-ink:#c9cdd6;
+    --good:#7fbf8f;
+    --bad:#d98a72;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --bg:#0a0d12;
+      --surface:#12151c;
+      --surface-2:#161a22;
+      --ink:#e9e6da;
+      --ink-dim:#9aa0ab;
+      --accent:#e0b675;
+      --accent-soft:#8a6f45;
+      --line:#232833;
+      --dust:#5c6472;
+      --code-bg:#0a0d12;
+      --code-ink:#c9cdd6;
+      --good:#7fbf8f;
+      --bad:#d98a72;
+    }
+  }
+
+  *{ box-sizing:border-box; }
+  body{
+    margin:0;
+    background:var(--bg);
+    color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;
+    line-height:1.6;
+  }
+  .wrap{
+    max-width:760px;
+    margin:0 auto;
+    padding:64px 24px 96px;
+  }
+  .eyebrow{
+    font-size:11px;
+    letter-spacing:.1em;
+    text-transform:uppercase;
+    color:var(--accent);
+    font-weight:600;
+    margin:0 0 10px;
+  }
+  h1{
+    font-family:Georgia,"Times New Roman",serif;
+    font-size:clamp(28px,5vw,40px);
+    line-height:1.15;
+    margin:0 0 16px;
+    text-wrap:balance;
+  }
+  .lede{
+    font-size:17px;
+    color:var(--ink-dim);
+    max-width:60ch;
+    margin:0 0 48px;
+  }
+  h2{
+    font-family:Georgia,"Times New Roman",serif;
+    font-size:24px;
+    margin:0 0 4px;
+    text-wrap:balance;
+  }
+  .section{
+    margin-top:64px;
+    padding-top:40px;
+    border-top:1px solid var(--line);
+  }
+  .section-label{
+    font-size:11px;
+    letter-spacing:.1em;
+    text-transform:uppercase;
+    color:var(--ink-dim);
+    margin:0 0 8px;
+  }
+  .section-desc{
+    color:var(--ink-dim);
+    margin:8px 0 20px;
+    max-width:62ch;
+  }
+  .demo-card{
+    background:var(--surface);
+    border:1px solid var(--line);
+    border-radius:10px;
+    overflow:hidden;
+  }
+  .demo-canvas-holder{
+    position:relative;
+    height:300px;
+    background:
+      radial-gradient(120% 90% at 50% 0%, var(--surface-2), var(--surface) 75%);
+  }
+  canvas{
+    display:block;
+    width:100%;
+    height:100%;
+    cursor:crosshair;
+    touch-action:none;
+  }
+  .demo-hud{
+    position:absolute;
+    left:0; right:0; bottom:0;
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    padding:10px 14px;
+    pointer-events:none;
+    font-size:10.5px;
+    letter-spacing:.06em;
+    text-transform:uppercase;
+    color:var(--ink-dim);
+  }
+  .demo-hud .pct{
+    font-variant-numeric:tabular-nums;
+    color:var(--accent);
+    font-weight:600;
+  }
+  .demo-controls{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    gap:12px;
+    padding:12px 14px;
+    border-top:1px solid var(--line);
+    background:var(--surface-2);
+  }
+  .demo-hint{
+    font-size:12.5px;
+    color:var(--ink-dim);
+  }
+  button.reset{
+    font:inherit;
+    font-size:12px;
+    letter-spacing:.04em;
+    text-transform:uppercase;
+    color:var(--ink);
+    background:var(--surface);
+    border:1px solid var(--line);
+    border-radius:6px;
+    padding:7px 14px;
+    cursor:pointer;
+  }
+  button.reset:hover{ border-color:var(--accent-soft); }
+  button.reset:focus-visible{ outline:2px solid var(--accent); outline-offset:2px; }
+
+  pre{
+    background:var(--code-bg);
+    color:var(--code-ink);
+    border-radius:8px;
+    padding:16px 18px;
+    overflow-x:auto;
+    font-size:12.5px;
+    line-height:1.55;
+    margin:20px 0 0;
+  }
+  code{
+    font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  }
+  :not(pre) > code{
+    background:var(--surface-2);
+    border:1px solid var(--line);
+    border-radius:4px;
+    padding:1px 5px;
+    font-size:.92em;
+  }
+
+  table{
+    width:100%;
+    border-collapse:collapse;
+    margin-top:20px;
+    font-size:14px;
+  }
+  th,td{
+    text-align:left;
+    padding:10px 12px;
+    border-bottom:1px solid var(--line);
+    vertical-align:top;
+  }
+  th{
+    font-size:11px;
+    letter-spacing:.06em;
+    text-transform:uppercase;
+    color:var(--ink-dim);
+    font-weight:600;
+  }
+  td.a{ color:var(--bad); }
+  td.b{ color:var(--good); }
+  .table-scroll{ overflow-x:auto; }
+
+  .callout{
+    background:var(--surface-2);
+    border:1px solid var(--line);
+    border-left:3px solid var(--accent);
+    border-radius:0 8px 8px 0;
+    padding:16px 18px;
+    margin-top:20px;
+    font-size:14.5px;
+    color:var(--ink-dim);
+  }
+  .callout b{ color:var(--ink); }
+
+  footer{
+    margin-top:72px;
+    padding-top:24px;
+    border-top:1px solid var(--line);
+    font-size:12.5px;
+    color:var(--ink-dim);
+  }
+
+  @media (prefers-reduced-motion: reduce){
+    * { scroll-behavior:auto !important; }
+  }
+</style>
+
+<div class="wrap">
+  <p class="eyebrow">Interaction technique &mdash; notes</p>
+  <h1>Particle name reveal, two ways</h1>
+  <p class="lede">
+    A dust field that assembles into a name as the cursor sweeps across it. Both
+    versions below share the same base technique &mdash; sample text into points,
+    animate anonymous dust motes toward them &mdash; but differ in how a mote gets
+    assigned to a letter. Try both; the difference is in how "productive" a sweep
+    feels.
+  </p>
+
+  <section>
+    <p class="section-label">The shared foundation</p>
+    <p class="section-desc">
+      Neither version hand-plots pixel coordinates. The name is drawn onto an
+      offscreen canvas with <code>fillText()</code>, then read back with
+      <code>getImageData()</code> &mdash; any pixel with alpha above a threshold
+      becomes a target point. That point cloud <em>is</em> the shape of the name.
+      Each point gets one particle; particles start scattered randomly and ease
+      toward their assigned point (<code>x += (targetX - x) * 0.1</code>) once
+      captured.
+    </p>
+  </section>
+
+  <section class="section" id="approach-a">
+    <p class="section-label">Approach A</p>
+    <h2>Pre-assigned particles, gated by letter</h2>
+    <p class="section-desc">
+      Every particle is tagged with its destination letter <em>up front</em>, at
+      build time. Only particles belonging to the <em>current</em> letter can be
+      captured &mdash; sweep near an "H" particle while "S" is still active, and
+      nothing happens. This guarantees strict letter-by-letter order, but most of
+      the dust you pass over at any moment belongs to a future letter and simply
+      can't react.
+    </p>
+    <div class="demo-card">
+      <div class="demo-canvas-holder">
+        <canvas id="canvasA" aria-label="Approach A demo: sweep to reveal"></canvas>
+        <div class="demo-hud">
+          <span>drag to sweep</span>
+          <span class="pct" id="pctA">0%</span>
+        </div>
+      </div>
+      <div class="demo-controls">
+        <span class="demo-hint">Only the active letter's particles respond &mdash; try hovering where a later letter will be.</span>
+        <button class="reset" id="resetA" type="button">Reset</button>
+      </div>
+    </div>
+    <pre><code>function captureNear(x, y) {
+  if (activeCharIndex >= NAME.length) return;
+  var bucket = byChar[activeCharIndex];   // only THIS letter's particles
+  for (var i = 0; i &lt; bucket.length; i++) {
+    var p = bucket[i];
+    if (p.captured) continue;
+    var dx = p.x - x, dy = p.y - y;
+    if (dx*dx + dy*dy &lt;= CAPTURE_R * CAPTURE_R) {
+      p.captured = true;
+      charRemaining[activeCharIndex]--;
+    }
+  }
+  if (charRemaining[activeCharIndex] &lt;= 0) activeCharIndex++;
+}</code></pre>
+  </section>
+
+  <section class="section" id="approach-b">
+    <p class="section-label">Approach B</p>
+    <h2>Anonymous particles, priority queue</h2>
+    <p class="section-desc">
+      Particles carry no destination at all until the instant they're captured.
+      Every letter-slot the name needs is pre-sorted once into a priority queue
+      &mdash; mostly by letter, with a little random jitter so adjacent letters
+      blend at the boundary instead of hard-cutting. Any nearby dust mote can be
+      captured; it just pops whatever's next off the queue. Sweep <em>anywhere</em>
+      and you're almost always doing something useful.
+    </p>
+    <div class="demo-card">
+      <div class="demo-canvas-holder">
+        <canvas id="canvasB" aria-label="Approach B demo: sweep to reveal"></canvas>
+        <div class="demo-hud">
+          <span>drag to sweep</span>
+          <span class="pct" id="pctB">0%</span>
+        </div>
+      </div>
+      <div class="demo-controls">
+        <span class="demo-hint">Every nearby particle is catchable &mdash; sweeping is never wasted.</span>
+        <button class="reset" id="resetB" type="button">Reset</button>
+      </div>
+    </div>
+    <pre><code>function captureNear(x, y) {
+  if (nextSlotIndex >= slots.length) return;
+  for (var i = 0; i &lt; particles.length; i++) {
+    var p = particles[i];
+    if (p.isAmbient || p.captured) continue;
+    var dx = p.x - x, dy = p.y - y;
+    if (dx*dx + dy*dy &lt;= CAPTURE_R * CAPTURE_R) {
+      var slot = slots[nextSlotIndex++];   // pop the queue
+      p.tx = slot.x; p.ty = slot.y;        // assigned only now
+      p.captured = true;
+    }
+  }
+}
+
+// priority = mostly letter order, blurred at the edges
+priority = charIndex + (tier / TIER_COUNT) + (Math.random() - 0.5) * JITTER;</code></pre>
+  </section>
+
+  <section class="section">
+    <p class="section-label">Comparison</p>
+    <h2>Which one to use</h2>
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr><th>Trait</th><th>A &mdash; gated</th><th>B &mdash; priority queue</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Sweep efficiency</td><td class="a">~1/n of dust usable at a time (n = letters)</td><td class="b">nearly all dust usable until queue empties</td></tr>
+          <tr><td>Visual feedback</td><td class="a">swept areas often look unchanged</td><td class="b">swept areas visibly empty out</td></tr>
+          <tr><td>Letter order</td><td class="b">hard-guaranteed sequential</td><td class="a">mostly sequential, soft overlap at edges</td></tr>
+          <tr><td>Particle state</td><td class="a">tx/ty fixed at build time</td><td class="b">tx/ty assigned at capture time</td></tr>
+          <tr><td>Code complexity</td><td class="a">per-letter bucketing + remaining-counts</td><td class="b">one sorted array + a cursor</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="callout">
+      <b>Why B ended up better here:</b> the failure mode of A wasn't the ordering
+      logic, it was that <em>most dust is inert most of the time</em>, which reads
+      as unresponsive. Decoupling "what you touched" from "what it becomes" (only
+      resolved via a queue pop) fixes that without giving up the letter-by-letter
+      feel &mdash; the queue's sort order still does that work.
+    </div>
+  </section>
+
+  <section class="section">
+    <p class="section-label">Custom fonts</p>
+    <h2>Do you need to supply pixel coordinates?</h2>
+    <p class="section-desc">
+      No &mdash; that's the point of sampling from a canvas instead of hand-plotting
+      a point list. <code>ctx.font</code> accepts any font family the browser can
+      render, including a custom one. Swap the family name and the exact same
+      <code>fillText</code> + <code>getImageData</code> pipeline picks up the new
+      letterforms automatically.
+    </p>
+    <p class="section-desc">
+      The one real gotcha: if the custom font hasn't finished loading yet when you
+      draw and sample, the canvas silently falls back to the platform default
+      font &mdash; no error, it just quietly samples the wrong shape. Load the font
+      and wait for it before sampling:
+    </p>
+    <pre><code>@font-face {
+  font-family: "MyDisplayFont";
+  src: url("./MyDisplayFont.woff2") format("woff2");
+  font-weight: 700;
+}
+
+&lt;script&gt;
+  // Match this string EXACTLY to what you'll use in ctx.font later
+  document.fonts.load('700 200px "MyDisplayFont"').then(function () {
+    buildParticles(); // now safe to sample &mdash; the font is actually loaded
+  });
+
+  // Alternative: wait for every declared @font-face to be ready
+  // document.fonts.ready.then(buildParticles);
+&lt;/script&gt;</code></pre>
+    <p class="section-desc" style="margin-top:20px;">
+      Then just point <code>ctx.font</code> at it, same as the built-in demos above:
+    </p>
+    <pre><code>octx.font = '700 ' + fontSize + 'px "MyDisplayFont"';
+octx.fillText(NAME, startX, h / 2);
+var pixels = octx.getImageData(0, 0, w, h).data; // unchanged from here on</code></pre>
+    <div class="callout">
+      A variable-width font (script/cursive faces especially) will change your
+      per-character bounds calculation &mdash; the demos above measure each
+      character's width individually via <code>measureText()</code> to figure out
+      which letter a given pixel belongs to. That still works with any font; you
+      just may want to sanity-check the bounds visually once, since script fonts
+      can have overlapping letter advances.
+    </div>
+  </section>
+
+  <footer>
+    Sampling technique: <code>canvas.fillText()</code> &rarr; <code>getImageData()</code> &rarr; alpha-threshold point cloud &rarr; one particle per point.
+  </footer>
+</div>
+
+<script>
+(function(){
+  "use strict";
+  var NAME = "ZIKYUU";
+
+  function hexToRgb(hex){
+    hex = hex.replace("#","");
+    if (hex.length === 3) hex = hex.split("").map(function(c){ return c+c; }).join("");
+    var num = parseInt(hex,16);
+    return [(num>>16)&255,(num>>8)&255,num&255];
+  }
+  function themeColor(name){
+    return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  }
+  function randomIn(w,h){ return { x: Math.random()*w, y: Math.random()*h }; }
+
+  function charIndexForX(x, bounds){
+    for (var i=0;i<bounds.length;i++){
+      if (x >= bounds[i].start && x < bounds[i].end) return bounds[i].index;
+    }
+    return x < bounds[0].start ? 0 : bounds[bounds.length-1].index;
+  }
+
+  // Shared by both demos: sample NAME into {x,y,ch,tier} points scaled to
+  // a w x h canvas. Neither approach needs anything more than this.
+  function sampleText(name, w, h){
+    var off = document.createElement("canvas");
+    var octx = off.getContext("2d");
+    off.width = w; off.height = h;
+
+    var fontSize = Math.min((w*0.86)/(name.length*0.62), h*0.62);
+    octx.font = "700 " + fontSize + "px Georgia, 'Times New Roman', serif";
+    octx.textAlign = "left";
+    octx.textBaseline = "middle";
+
+    var totalWidth = octx.measureText(name).width;
+    var startX = (w - totalWidth) / 2;
+    var charBounds = [];
+    var cursorX = startX;
+    for (var ci=0; ci<name.length; ci++){
+      var chW = octx.measureText(name[ci]).width;
+      charBounds.push({ start: cursorX, end: cursorX+chW, index: ci });
+      cursorX += chW;
+    }
+
+    octx.fillStyle = "#fff";
+    octx.fillText(name, startX, h/2);
+
+    var step = Math.max(2, Math.floor(fontSize/26));
+    var img = octx.getImageData(0,0,w,h).data;
+    var TIER_GRID = 3, TIER_COUNT = 9;
+    var pts = [];
+    for (var y=0; y<h; y+=step){
+      for (var x=0; x<w; x+=step){
+        if (img[(y*w+x)*4+3] > 140){
+          var gx = Math.round(x/step), gy = Math.round(y/step);
+          var tier = (gx % TIER_GRID) + (gy % TIER_GRID) * TIER_GRID;
+          pts.push({ x:x, y:y, ch: charIndexForX(x, charBounds), tier: tier });
+        }
+      }
+    }
+    return pts;
+  }
+
+  function fitCanvas(canvas){
+    var rect = canvas.parentElement.getBoundingClientRect();
+    var dpr = Math.min(window.devicePixelRatio || 1, 2);
+    var w = Math.max(1, Math.round(rect.width));
+    var h = Math.max(1, Math.round(rect.height));
+    canvas.width = w * dpr; canvas.height = h * dpr;
+    canvas.style.width = w+"px"; canvas.style.height = h+"px";
+    var ctx = canvas.getContext("2d");
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+    return { ctx: ctx, w: w, h: h };
+  }
+
+  // ---------- Approach A: pre-assigned, gated by letter ----------
+  function initApproachA(){
+    var canvas = document.getElementById("canvasA");
+    var pctEl = document.getElementById("pctA");
+    var CAPTURE_R = 46, NUDGE_R = 20;
+    var dims, particles, byChar, charRemaining, activeCharIndex, capturedCount, total;
+    var mouse = { x:-9999, y:-9999, active:false, lastX:0, lastY:0 };
+
+    function build(){
+      dims = fitCanvas(canvas);
+      var pts = sampleText(NAME, dims.w, dims.h);
+      particles = []; byChar = []; charRemaining = [];
+      for (var c=0;c<NAME.length;c++){ byChar.push([]); charRemaining.push(0); }
+      capturedCount = 0; activeCharIndex = 0; total = pts.length;
+
+      for (var i=0;i<pts.length;i++){
+        var home = randomIn(dims.w, dims.h);
+        var p = {
+          x:home.x, y:home.y, homeX:home.x, homeY:home.y,
+          tx:pts[i].x, ty:pts[i].y, ch:pts[i].ch, tier:pts[i].tier,
+          captured:false, isAmbient:false,
+          size:1.1+Math.random()*1.2, phase:Math.random()*Math.PI*2,
+          speed:0.15+Math.random()*0.25, driftR:6+Math.random()*10
+        };
+        particles.push(p); byChar[p.ch].push(p); charRemaining[p.ch]++;
+      }
+      var ambientCount = Math.min(90, Math.round(pts.length*0.3));
+      for (var a=0;a<ambientCount;a++){
+        var h2 = randomIn(dims.w, dims.h);
+        particles.push({
+          x:h2.x, y:h2.y, homeX:h2.x, homeY:h2.y, tx:null, ty:null,
+          captured:false, isAmbient:true,
+          size:0.7+Math.random()*0.8, phase:Math.random()*Math.PI*2,
+          speed:0.1+Math.random()*0.2, driftR:10+Math.random()*18
+        });
+      }
+      updatePct();
+    }
+
+    function updatePct(){
+      pctEl.textContent = Math.round((capturedCount/(total||1))*100) + "%";
+    }
+
+    function captureNear(x,y){
+      if (activeCharIndex >= NAME.length) return;
+      var bucket = byChar[activeCharIndex];
+      var any = false;
+      for (var i=0;i<bucket.length;i++){
+        var p = bucket[i];
+        if (p.captured) continue;
+        var dx=p.x-x, dy=p.y-y;
+        if (dx*dx+dy*dy <= CAPTURE_R*CAPTURE_R){
+          p.captured = true; capturedCount++; charRemaining[activeCharIndex]--; any = true;
+        }
+      }
+      if (charRemaining[activeCharIndex] <= 0){
+        while (activeCharIndex < NAME.length && charRemaining[activeCharIndex] <= 0) activeCharIndex++;
+      }
+      if (any) updatePct();
+    }
+    function captureAlong(x0,y0,x1,y1){
+      var dx=x1-x0, dy=y1-y0, dist=Math.sqrt(dx*dx+dy*dy);
+      var steps = Math.max(1, Math.ceil(dist/(CAPTURE_R*0.6)));
+      for (var s=1;s<=steps;s++){ var f=s/steps; captureNear(x0+dx*f, y0+dy*f); }
+    }
+
+    function step(t){
+      var ctx = dims.ctx;
+      ctx.clearRect(0,0,dims.w,dims.h);
+      var dustRgb = hexToRgb(themeColor("--dust"));
+      var amberRgb = hexToRgb(themeColor("--accent"));
+      var amberDimRgb = hexToRgb(themeColor("--accent-soft"));
+
+      for (var i=0;i<particles.length;i++){
+        var p = particles[i];
+        var isPreview = !p.isAmbient && !p.captured && p.ch > activeCharIndex && p.ch <= activeCharIndex+2 && p.tier === 0;
+
+        if (p.captured){
+          p.x += (p.tx-p.x)*0.10; p.y += (p.ty-p.y)*0.10;
+        } else if (isPreview){
+          p.x += (p.tx-p.x)*0.05; p.y += (p.ty-p.y)*0.05;
+        } else {
+          var wx = p.homeX + Math.cos(t*0.0004*p.speed+p.phase)*p.driftR;
+          var wy = p.homeY + Math.sin(t*0.0005*p.speed+p.phase*1.3)*p.driftR;
+          p.x += (wx-p.x)*0.03; p.y += (wy-p.y)*0.03;
+          if (mouse.active){
+            var ndx=p.x-mouse.x, ndy=p.y-mouse.y, nd=Math.sqrt(ndx*ndx+ndy*ndy);
+            if (nd<NUDGE_R && nd>0.01){ var f=(1-nd/NUDGE_R)*2.6; p.x+=(ndx/nd)*f; p.y+=(ndy/nd)*f; }
+          }
+        }
+
+        var tw = Math.sin(t*0.002*p.speed+p.phase)*0.3+0.7;
+        var rgb = p.captured ? amberRgb : (isPreview ? amberDimRgb : dustRgb);
+        var alpha = p.captured ? 0.9*tw : isPreview ? 0.22+tw*0.06 : (p.isAmbient?0.3:0.5)*tw;
+        ctx.beginPath();
+        ctx.fillStyle = "rgba("+rgb[0]+","+rgb[1]+","+rgb[2]+","+alpha.toFixed(3)+")";
+        ctx.arc(p.x,p.y,p.size,0,Math.PI*2); ctx.fill();
+      }
+      requestAnimationFrame(step);
+    }
+
+    function reset(){
+      for (var i=0;i<particles.length;i++){
+        var p = particles[i];
+        if (p.captured){ var h=randomIn(dims.w,dims.h); p.homeX=h.x; p.homeY=h.y; }
+        p.captured=false;
+      }
+      capturedCount=0; activeCharIndex=0;
+      for (var c=0;c<NAME.length;c++) charRemaining[c]=byChar[c].length;
+      updatePct();
+    }
+
+    function setMouse(x,y){
+      if (mouse.active) captureAlong(mouse.lastX, mouse.lastY, x, y);
+      else captureNear(x,y);
+      mouse.x=x; mouse.y=y; mouse.active=true; mouse.lastX=x; mouse.lastY=y;
+    }
+    canvas.addEventListener("mousemove", function(e){
+      var r = canvas.getBoundingClientRect();
+      setMouse(e.clientX-r.left, e.clientY-r.top);
+    });
+    canvas.addEventListener("mouseleave", function(){ mouse.active=false; });
+    canvas.addEventListener("touchmove", function(e){
+      if (e.touches && e.touches.length){
+        var r = canvas.getBoundingClientRect();
+        setMouse(e.touches[0].clientX-r.left, e.touches[0].clientY-r.top);
+      }
+      e.preventDefault();
+    }, {passive:false});
+    canvas.addEventListener("touchend", function(){ mouse.active=false; });
+    document.getElementById("resetA").addEventListener("click", reset);
+    window.addEventListener("resize", build);
+
+    build();
+    requestAnimationFrame(step);
+  }
+
+  // ---------- Approach B: anonymous particles, priority queue ----------
+  function initApproachB(){
+    var canvas = document.getElementById("canvasB");
+    var pctEl = document.getElementById("pctB");
+    var CAPTURE_R = 58, NUDGE_R = 20, PRIORITY_JITTER = 0.55, PREVIEW_COUNT = 30;
+    var dims, particles, slots, nextSlotIndex;
+    var mouse = { x:-9999, y:-9999, active:false, lastX:0, lastY:0 };
+
+    function build(){
+      dims = fitCanvas(canvas);
+      var pts = sampleText(NAME, dims.w, dims.h);
+      for (var i=0;i<pts.length;i++){
+        pts[i].priority = pts[i].ch + (pts[i].tier/9) + (Math.random()-0.5)*PRIORITY_JITTER;
+      }
+      pts.sort(function(a,b){ return a.priority-b.priority; });
+      slots = pts; nextSlotIndex = 0;
+      particles = [];
+      for (var j=0;j<slots.length;j++){
+        var home = randomIn(dims.w, dims.h);
+        particles.push({
+          x:home.x, y:home.y, homeX:home.x, homeY:home.y, tx:null, ty:null,
+          captured:false, isAmbient:false,
+          size:1.1+Math.random()*1.2, phase:Math.random()*Math.PI*2,
+          speed:0.15+Math.random()*0.25, driftR:6+Math.random()*10
+        });
+      }
+      var ambientCount = Math.min(90, Math.round(slots.length*0.3));
+      for (var a=0;a<ambientCount;a++){
+        var h2 = randomIn(dims.w, dims.h);
+        particles.push({
+          x:h2.x, y:h2.y, homeX:h2.x, homeY:h2.y, tx:null, ty:null,
+          captured:false, isAmbient:true,
+          size:0.7+Math.random()*0.8, phase:Math.random()*Math.PI*2,
+          speed:0.1+Math.random()*0.2, driftR:10+Math.random()*18
+        });
+      }
+      updatePct();
+    }
+
+    function updatePct(){
+      pctEl.textContent = Math.round((nextSlotIndex/(slots.length||1))*100) + "%";
+    }
+
+    function captureNear(x,y){
+      if (nextSlotIndex >= slots.length) return;
+      var any = false;
+      for (var i=0;i<particles.length;i++){
+        if (nextSlotIndex >= slots.length) break;
+        var p = particles[i];
+        if (p.isAmbient || p.captured) continue;
+        var dx=p.x-x, dy=p.y-y;
+        if (dx*dx+dy*dy <= CAPTURE_R*CAPTURE_R){
+          var slot = slots[nextSlotIndex++];
+          p.tx = slot.x; p.ty = slot.y; p.captured = true; any = true;
+        }
+      }
+      if (any) updatePct();
+    }
+    function captureAlong(x0,y0,x1,y1){
+      var dx=x1-x0, dy=y1-y0, dist=Math.sqrt(dx*dx+dy*dy);
+      var steps = Math.max(1, Math.ceil(dist/(CAPTURE_R*0.6)));
+      for (var s=1;s<=steps;s++){ var f=s/steps; captureNear(x0+dx*f, y0+dy*f); }
+    }
+
+    function step(t){
+      var ctx = dims.ctx;
+      ctx.clearRect(0,0,dims.w,dims.h);
+      var dustRgb = hexToRgb(themeColor("--dust"));
+      var amberRgb = hexToRgb(themeColor("--accent"));
+      var amberDimRgb = hexToRgb(themeColor("--accent-soft"));
+
+      var previewEnd = Math.min(slots.length, nextSlotIndex+PREVIEW_COUNT);
+      for (var s=nextSlotIndex; s<previewEnd; s++){
+        var slot = slots[s];
+        var ptw = Math.sin(t*0.0015+s)*0.25+0.75;
+        ctx.beginPath();
+        ctx.fillStyle = "rgba("+amberDimRgb[0]+","+amberDimRgb[1]+","+amberDimRgb[2]+","+(0.18*ptw).toFixed(3)+")";
+        ctx.arc(slot.x, slot.y, 1.2, 0, Math.PI*2); ctx.fill();
+      }
+
+      for (var i=0;i<particles.length;i++){
+        var p = particles[i];
+        if (p.captured){
+          p.x += (p.tx-p.x)*0.10; p.y += (p.ty-p.y)*0.10;
+        } else {
+          var wx = p.homeX + Math.cos(t*0.0004*p.speed+p.phase)*p.driftR;
+          var wy = p.homeY + Math.sin(t*0.0005*p.speed+p.phase*1.3)*p.driftR;
+          p.x += (wx-p.x)*0.03; p.y += (wy-p.y)*0.03;
+          if (mouse.active){
+            var ndx=p.x-mouse.x, ndy=p.y-mouse.y, nd=Math.sqrt(ndx*ndx+ndy*ndy);
+            if (nd<NUDGE_R && nd>0.01){ var f=(1-nd/NUDGE_R)*2.6; p.x+=(ndx/nd)*f; p.y+=(ndy/nd)*f; }
+          }
+        }
+        var tw = Math.sin(t*0.002*p.speed+p.phase)*0.3+0.7;
+        var rgb = p.captured ? amberRgb : dustRgb;
+        var alpha = (p.captured?0.9:(p.isAmbient?0.3:0.5))*tw;
+        ctx.beginPath();
+        ctx.fillStyle = "rgba("+rgb[0]+","+rgb[1]+","+rgb[2]+","+alpha.toFixed(3)+")";
+        ctx.arc(p.x,p.y,p.size,0,Math.PI*2); ctx.fill();
+      }
+      requestAnimationFrame(step);
+    }
+
+    function reset(){
+      for (var i=0;i<particles.length;i++){
+        var p = particles[i];
+        if (p.captured){ var h=randomIn(dims.w,dims.h); p.homeX=h.x; p.homeY=h.y; }
+        p.captured=false; p.tx=null; p.ty=null;
+      }
+      nextSlotIndex=0; updatePct();
+    }
+
+    function setMouse(x,y){
+      if (mouse.active) captureAlong(mouse.lastX, mouse.lastY, x, y);
+      else captureNear(x,y);
+      mouse.x=x; mouse.y=y; mouse.active=true; mouse.lastX=x; mouse.lastY=y;
+    }
+    canvas.addEventListener("mousemove", function(e){
+      var r = canvas.getBoundingClientRect();
+      setMouse(e.clientX-r.left, e.clientY-r.top);
+    });
+    canvas.addEventListener("mouseleave", function(){ mouse.active=false; });
+    canvas.addEventListener("touchmove", function(e){
+      if (e.touches && e.touches.length){
+        var r = canvas.getBoundingClientRect();
+        setMouse(e.touches[0].clientX-r.left, e.touches[0].clientY-r.top);
+      }
+      e.preventDefault();
+    }, {passive:false});
+    canvas.addEventListener("touchend", function(){ mouse.active=false; });
+    document.getElementById("resetB").addEventListener("click", reset);
+    window.addEventListener("resize", build);
+
+    build();
+    requestAnimationFrame(step);
+  }
+
+  initApproachA();
+  initApproachB();
+})();
+</script>

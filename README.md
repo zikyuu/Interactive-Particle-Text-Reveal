@@ -1,0 +1,66 @@
+# Interactive Particle Text Reveal
+
+A dust field that assembles into a name as the cursor sweeps across it — built with vanilla Canvas 2D, no dependencies.
+
+**[Live demo](https://zikyuu.github.io/Interactive-Particle-Text-Reveal/)** · **[Approach A vs B + learning notes](https://zikyuu.github.io/Interactive-Particle-Text-Reveal/approaches.html)**
+
+> Note: the interactive version only runs on the links above (GitHub Pages) — GitHub sanitizes `<script>` tags out of rendered READMEs, so it can't run inline on this page.
+
+## How it works
+
+1. The name is drawn onto an offscreen `<canvas>` with `fillText()`, then read back with `getImageData()`. Any pixel with alpha above a threshold becomes a target point — that point cloud *is* the shape of the name. No coordinates are hand-plotted.
+2. Each point gets one particle. Particles start scattered randomly and ease toward their assigned point (`x += (targetX - x) * 0.1`) once captured.
+3. What decides *when* a particle gets captured, and *which* point it's assigned to, is where the two versions in this repo differ.
+
+## Two approaches
+
+This repo ships both, side by side, as a small case study in the same problem (see [`approaches.html`](https://zikyuu.github.io/Interactive-Particle-Text-Reveal/approaches.html) for live demos of each + a comparison table):
+
+| | Approach A — gated by letter | Approach B — priority queue |
+|---|---|---|
+| Particle destination | assigned up front, at build time | assigned only at the moment of capture |
+| What's catchable | only the current letter's particles | any nearby particle |
+| Sweep efficiency | ~1/n of dust usable at a time (n = letters) | nearly all dust usable until the queue empties |
+| Letter order | hard-guaranteed sequential | mostly sequential, soft overlap at letter boundaries |
+
+**Approach A** tags every particle with its destination letter up front and only lets the *current* letter's particles react — simple to reason about, but most of the dust you sweep over at any given moment can't respond, which reads as unresponsive.
+
+**Approach B** fixes that: particles are anonymous until capture. Every letter-slot the name needs is pre-sorted once into a priority queue (mostly by letter order, with jitter so adjacent letters blend instead of hard-cutting), and a captured particle just pops whatever's next off that queue. Nearly any dust you touch is useful, and swept areas visibly empty out. `index.html` runs this version; both live side by side in `approaches.html`.
+
+## Using a custom font
+
+No coordinate file needed — that's the point of sampling from canvas instead of hand-plotting points. `ctx.font` accepts any font the browser can render; swap the family name and the same `fillText` + `getImageData` pipeline picks up the new letterforms automatically.
+
+The one gotcha: if a custom font hasn't finished loading when you sample, canvas silently falls back to the platform default — no error, just the wrong shape. Wait for it first:
+
+```js
+document.fonts.load('700 200px "MyDisplayFont"').then(function () {
+  buildParticles(); // safe now — the font is actually loaded
+});
+```
+
+Then point `ctx.font` at it, same as this repo's demos:
+
+```js
+octx.font = '700 ' + fontSize + 'px "MyDisplayFont"';
+octx.fillText(NAME, startX, h / 2);
+var pixels = octx.getImageData(0, 0, w, h).data; // unchanged from here on
+```
+
+## Running locally
+
+No build step. Any static file server works:
+
+```bash
+python3 -m http.server 8000
+# then open http://localhost:8000/index.html
+```
+
+## Files
+
+- `index.html` — the main demo (Approach B, priority queue)
+- `approaches.html` — both approaches side by side, with code snippets and a comparison table
+
+## License
+
+MIT

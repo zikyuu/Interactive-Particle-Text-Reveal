@@ -1,0 +1,449 @@
+<title>particle_name_reveal</title>
+<style>
+  :root{
+    --bg-0:#0a0d12;
+    --bg-1:#10141b;
+    --dust:#e9e6da;
+    --dust-dim:#5c6472;
+    --amber:#e0b675;
+    --amber-dim:#8a6f45;
+    --ink:#c9cdd6;
+    --ink-dim:#6b7280;
+  }
+  :root[data-theme="light"]{
+    --bg-0:#eceae2;
+    --bg-1:#f4f2ea;
+    --dust:#2a2e36;
+    --dust-dim:#9a9488;
+    --amber:#a3702f;
+    --amber-dim:#c9a874;
+    --ink:#3a3d44;
+    --ink-dim:#8a8478;
+  }
+  @media (prefers-color-scheme: light){
+    :root:not([data-theme="dark"]){
+      --bg-0:#eceae2;
+      --bg-1:#f4f2ea;
+      --dust:#2a2e36;
+      --dust-dim:#9a9488;
+      --amber:#a3702f;
+      --amber-dim:#c9a874;
+      --ink:#3a3d44;
+      --ink-dim:#8a8478;
+    }
+  }
+  *{box-sizing:border-box;}
+  html,body{
+    margin:0;
+    height:100%;
+    width:100%;
+    overflow:hidden;
+    background:
+      radial-gradient(120% 90% at 50% 12%, var(--bg-1), var(--bg-0) 70%);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;
+  }
+  #field{
+    display:block;
+    width:100%;
+    height:100%;
+    cursor:crosshair;
+    touch-action:none;
+  }
+  .hud{
+    position:fixed;
+    left:0; right:0; bottom:0;
+    display:flex;
+    justify-content:space-between;
+    align-items:flex-end;
+    padding:22px 26px;
+    pointer-events:none;
+    font-size:11px;
+    letter-spacing:.08em;
+    text-transform:uppercase;
+    color:var(--ink-dim);
+  }
+  .hud .hint{
+    max-width:280px;
+    line-height:1.6;
+    transition:opacity .8s ease;
+  }
+  .hud .hint b{
+    color:var(--ink);
+    font-weight:600;
+  }
+  .hud .progress{
+    font-variant-numeric:tabular-nums;
+    display:flex;
+    align-items:center;
+    gap:8px;
+    opacity:0;
+    transition:opacity .5s ease;
+  }
+  .hud .progress.show{ opacity:1; }
+  .hud .progress .bar{
+    width:64px;
+    height:2px;
+    background:color-mix(in srgb, var(--ink-dim) 35%, transparent);
+    position:relative;
+    overflow:hidden;
+  }
+  .hud .progress .bar i{
+    position:absolute;
+    left:0; top:0; bottom:0;
+    width:0%;
+    background:var(--amber);
+    transition:width .3s ease;
+  }
+  .eyebrow{
+    position:fixed;
+    top:22px;
+    left:26px;
+    font-size:11px;
+    letter-spacing:.08em;
+    text-transform:uppercase;
+    color:var(--ink-dim);
+    pointer-events:none;
+  }
+</style>
+
+<canvas id="field"></canvas>
+<div class="eyebrow">particle field &mdash; demo</div>
+<div class="hud">
+  <div class="hint" id="hint">Sweep across the dust to gather each letter in turn. <b>Double-click</b> to scatter it again.</div>
+  <div class="progress" id="progress"><span id="pct">0%</span><span class="bar"><i id="bar"></i></span></div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  var NAME = "ZIKYUU";
+
+  var canvas = document.getElementById("field");
+  var ctx = canvas.getContext("2d");
+  var hintEl = document.getElementById("hint");
+  var progressEl = document.getElementById("progress");
+  var pctEl = document.getElementById("pct");
+  var barEl = document.getElementById("bar");
+
+  var DPR = Math.min(window.devicePixelRatio || 1, 2);
+  var W = 0, H = 0;
+  var reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  function themeColors(){
+    var root = document.documentElement;
+    var cs = getComputedStyle(root);
+    return {
+      dust: cs.getPropertyValue("--dust").trim(),
+      dustDim: cs.getPropertyValue("--dust-dim").trim(),
+      amber: cs.getPropertyValue("--amber").trim(),
+      amberDim: cs.getPropertyValue("--amber-dim").trim()
+    };
+  }
+  var COLORS = themeColors();
+
+  function hexToRgb(hex){
+    hex = hex.replace("#","");
+    if(hex.length === 3){
+      hex = hex.split("").map(function(c){ return c+c; }).join("");
+    }
+    var num = parseInt(hex,16);
+    return [(num>>16)&255,(num>>8)&255,num&255];
+  }
+
+  var particles = [];
+  // The priority queue: every letter-pixel the name needs, pre-sorted by
+  // priority (roughly letter order, with jitter so adjacent letters blend
+  // at the boundary instead of hard-cutting). A dust mote doesn't know
+  // which slot it will fill until the moment it's captured — it just pops
+  // the next one off this queue. That's what makes *any* nearby dust
+  // useful to sweep, not just dust pre-assigned to the current letter.
+  var slots = [];
+  var nextSlotIndex = 0;
+  var mouse = { x: -9999, y: -9999, active:false, lastX:0, lastY:0 };
+  var lastInteraction = 0;
+  var PRIORITY_JITTER = 0.55;
+  var TIER_GRID = 3;
+  var TIER_COUNT = TIER_GRID * TIER_GRID;
+
+  function charIndexForX(x, bounds){
+    for (var i = 0; i < bounds.length; i++){
+      if (x >= bounds[i].start && x < bounds[i].end) return bounds[i].index;
+    }
+    return x < bounds[0].start ? 0 : bounds[bounds.length - 1].index;
+  }
+
+  // Samples the name into points, each tagged with a priority: mostly by
+  // letter (S before H before I...), coarse tier before fine within a
+  // letter, plus random jitter so the boundary between letters blends
+  // (a trickle of H shows up before S is fully done) instead of snapping.
+  // Sorting once by that priority IS the queue — popping the next slot
+  // is just reading the next array index.
+  function sampleTextTargets(){
+    var off = document.createElement("canvas");
+    var octx = off.getContext("2d");
+    var w = Math.max(W, 800);
+    var h = Math.max(H, 500);
+    off.width = w;
+    off.height = h;
+
+    var fontSize = Math.min((w * 0.82) / (NAME.length * 0.62), h * 0.42);
+    var font = "700 " + fontSize + "px Georgia, 'Times New Roman', serif";
+    octx.font = font;
+    octx.textAlign = "left";
+    octx.textBaseline = "middle";
+
+    var totalWidth = octx.measureText(NAME).width;
+    var startX = (w - totalWidth) / 2;
+    var charBounds = [];
+    var cursorX = startX;
+    for (var ci = 0; ci < NAME.length; ci++){
+      var chW = octx.measureText(NAME[ci]).width;
+      charBounds.push({ start: cursorX, end: cursorX + chW, index: ci });
+      cursorX += chW;
+    }
+
+    octx.clearRect(0,0,w,h);
+    octx.fillStyle = "#fff";
+    octx.fillText(NAME, startX, h/2);
+
+    var step = Math.max(2, Math.floor(fontSize / 32));
+    var img = octx.getImageData(0,0,w,h).data;
+    var pts = [];
+
+    for (var y = 0; y < h; y += step){
+      for (var x = 0; x < w; x += step){
+        var alpha = img[(y*w+x)*4 + 3];
+        if (alpha > 140){
+          var gx = Math.round(x/step), gy = Math.round(y/step);
+          var tier = (gx % TIER_GRID) + (gy % TIER_GRID) * TIER_GRID;
+          var ch = charIndexForX(x, charBounds);
+          var priority = ch + (tier / TIER_COUNT) + (Math.random() - 0.5) * PRIORITY_JITTER;
+          pts.push({ x: x, y: y, ch: ch, tier: tier, priority: priority });
+        }
+      }
+    }
+    pts.sort(function(a, b){ return a.priority - b.priority; });
+    return pts;
+  }
+
+  function randomHome(){
+    return {
+      x: Math.random() * W,
+      y: Math.random() * H
+    };
+  }
+
+  function buildParticles(){
+    slots = sampleTextTargets();
+    nextSlotIndex = 0;
+    particles = [];
+
+    var ambientCount = Math.min(220, Math.round(slots.length * 0.35));
+
+    // One anonymous dust mote per slot. A mote's start position is just
+    // wherever it happens to be wandering; its end position (tx/ty) is
+    // only decided when it's captured, by popping the queue.
+    for (var i = 0; i < slots.length; i++){
+      var home = randomHome();
+      particles.push({
+        x: home.x, y: home.y,
+        homeX: home.x, homeY: home.y,
+        tx: null, ty: null,
+        captured: false,
+        isAmbient: false,
+        size: 1.1 + Math.random() * 1.3,
+        phase: Math.random() * Math.PI * 2,
+        speed: 0.15 + Math.random() * 0.25,
+        driftR: 8 + Math.random() * 14
+      });
+    }
+    for (var a = 0; a < ambientCount; a++){
+      var h2 = randomHome();
+      particles.push({
+        x: h2.x, y: h2.y,
+        homeX: h2.x, homeY: h2.y,
+        tx: null, ty: null,
+        captured: false,
+        isAmbient: true,
+        size: 0.7 + Math.random() * 1.0,
+        phase: Math.random() * Math.PI * 2,
+        speed: 0.1 + Math.random() * 0.2,
+        driftR: 14 + Math.random() * 26
+      });
+    }
+    updateProgress();
+  }
+
+  function updateProgress(){
+    var total = slots.length || 1;
+    var pct = Math.round((nextSlotIndex / total) * 100);
+    pctEl.textContent = pct + "%";
+    barEl.style.width = pct + "%";
+    if (nextSlotIndex > 0){
+      progressEl.classList.add("show");
+    }
+    if (pct >= 100 && nextSlotIndex === total){
+      hintEl.style.opacity = "0";
+    }
+  }
+
+  function resize(){
+    W = window.innerWidth;
+    H = window.innerHeight;
+    canvas.width = W * DPR;
+    canvas.height = H * DPR;
+    canvas.style.width = W + "px";
+    canvas.style.height = H + "px";
+    ctx.setTransform(DPR,0,0,DPR,0,0);
+    buildParticles();
+  }
+
+  var NUDGE_R = 30;
+  var CAPTURE_R = 85;
+  var PREVIEW_COUNT = 70;
+
+  // Any uncaptured dust mote within range gets captured — it doesn't
+  // matter which letter it'll end up as. Its destination is only decided
+  // here, by popping the next slot off the priority queue. That's what
+  // makes nearly every sweep productive instead of only ~1/7th of it.
+  function captureNear(x, y){
+    if (nextSlotIndex >= slots.length) return;
+    var capturedAny = false;
+    for (var i = 0; i < particles.length; i++){
+      if (nextSlotIndex >= slots.length) break;
+      var p = particles[i];
+      if (p.isAmbient || p.captured) continue;
+      var dx = p.x - x, dy = p.y - y;
+      if (dx*dx + dy*dy <= CAPTURE_R * CAPTURE_R){
+        var slot = slots[nextSlotIndex++];
+        p.tx = slot.x; p.ty = slot.y;
+        p.ch = slot.ch; p.tier = slot.tier;
+        p.captured = true;
+        capturedAny = true;
+      }
+    }
+    if (capturedAny) updateProgress();
+  }
+
+  // Sweeps capture checks along the path travelled since the last event
+  // so a fast drag doesn't skip particles that sat between two frames.
+  function captureAlongPath(x0, y0, x1, y1){
+    var dx = x1 - x0, dy = y1 - y0;
+    var dist = Math.sqrt(dx*dx + dy*dy);
+    var stepPx = CAPTURE_R * 0.6;
+    var steps = Math.max(1, Math.ceil(dist / stepPx));
+    for (var s = 1; s <= steps; s++){
+      var f = s / steps;
+      captureNear(x0 + dx * f, y0 + dy * f);
+    }
+  }
+
+  function step(t){
+    ctx.clearRect(0,0,W,H);
+
+    var dustRgb = hexToRgb(COLORS.dust);
+    var amberRgb = hexToRgb(COLORS.amber);
+    var amberDimRgb = hexToRgb(COLORS.amberDim);
+
+    // A faint preview of the next stretch of the queue, drawn straight
+    // from the slots themselves — no particle needs to "be" the preview,
+    // so this stays correct no matter which physical motes fill it later.
+    var previewEnd = Math.min(slots.length, nextSlotIndex + PREVIEW_COUNT);
+    for (var s = nextSlotIndex; s < previewEnd; s++){
+      var slot = slots[s];
+      var pTwinkle = reduceMotion ? 0.8 : (Math.sin(t*0.0015 + s) * 0.25 + 0.75);
+      ctx.beginPath();
+      ctx.fillStyle = "rgba(" + amberDimRgb[0] + "," + amberDimRgb[1] + "," + amberDimRgb[2] + "," + (0.16 * pTwinkle).toFixed(3) + ")";
+      ctx.arc(slot.x, slot.y, 1.3, 0, Math.PI*2);
+      ctx.fill();
+    }
+
+    for (var i = 0; i < particles.length; i++){
+      var p = particles[i];
+
+      if (p.captured){
+        p.x += (p.tx - p.x) * 0.10;
+        p.y += (p.ty - p.y) * 0.10;
+        var settleWob = reduceMotion ? 0 : Math.sin(t*0.0012 + p.phase) * 0.35;
+        p.x += settleWob * 0.15;
+      } else {
+        if (!reduceMotion){
+          var wx = p.homeX + Math.cos(t*0.0004*p.speed + p.phase) * p.driftR;
+          var wy = p.homeY + Math.sin(t*0.0005*p.speed + p.phase*1.3) * p.driftR;
+          p.x += (wx - p.x) * 0.03;
+          p.y += (wy - p.y) * 0.03;
+        }
+        if (mouse.active){
+          var ndx = p.x - mouse.x, ndy = p.y - mouse.y;
+          var nd = Math.sqrt(ndx*ndx + ndy*ndy);
+          if (nd < NUDGE_R && nd > 0.01){
+            var f = (1 - nd / NUDGE_R) * 3.2;
+            p.x += (ndx / nd) * f;
+            p.y += (ndy / nd) * f;
+          }
+        }
+      }
+
+      var twinkle = reduceMotion ? 0.8 : (Math.sin(t*0.002*p.speed + p.phase) * 0.3 + 0.7);
+      var rgb = p.captured ? amberRgb : dustRgb;
+      var alpha = (p.captured ? 0.9 : (p.isAmbient ? 0.35 : 0.55)) * twinkle;
+
+      ctx.beginPath();
+      ctx.fillStyle = "rgba(" + rgb[0] + "," + rgb[1] + "," + rgb[2] + "," + alpha.toFixed(3) + ")";
+      ctx.arc(p.x, p.y, p.size, 0, Math.PI*2);
+      ctx.fill();
+    }
+
+    requestAnimationFrame(step);
+  }
+
+  function scatter(){
+    for (var i = 0; i < particles.length; i++){
+      var p = particles[i];
+      if (p.captured){
+        var h = randomHome();
+        p.homeX = h.x; p.homeY = h.y;
+      }
+      p.captured = false;
+      p.tx = null; p.ty = null;
+    }
+    nextSlotIndex = 0;
+    updateProgress();
+    hintEl.style.opacity = "1";
+  }
+
+  function setMouse(x, y){
+    if (mouse.active){
+      captureAlongPath(mouse.lastX, mouse.lastY, x, y);
+    } else {
+      captureNear(x, y);
+    }
+    mouse.x = x; mouse.y = y; mouse.active = true;
+    mouse.lastX = x; mouse.lastY = y;
+    lastInteraction = performance.now();
+  }
+
+  canvas.addEventListener("mousemove", function(e){
+    setMouse(e.clientX, e.clientY);
+  });
+  canvas.addEventListener("mouseleave", function(){
+    mouse.active = false;
+  });
+  canvas.addEventListener("touchmove", function(e){
+    if (e.touches && e.touches.length){
+      setMouse(e.touches[0].clientX, e.touches[0].clientY);
+    }
+    e.preventDefault();
+  }, { passive:false });
+  canvas.addEventListener("touchend", function(){
+    mouse.active = false;
+  });
+  canvas.addEventListener("dblclick", scatter);
+
+  window.addEventListener("resize", resize);
+
+  resize();
+  requestAnimationFrame(step);
+})();
+</script>
