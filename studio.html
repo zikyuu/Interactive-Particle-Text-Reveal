@@ -612,8 +612,8 @@
   function updateScatterLabel(){ els.scatterVal.textContent = scatterPct + "%"; }
   els.scatterSlider.addEventListener("input", function(){
     scatterPct = parseInt(els.scatterSlider.value, 10);
-    updateScatterLabel(); // affects the play stage's starting layout only,
-                           // not the point-cloud preview — nothing to redraw here
+    updateScatterLabel(); schedulePreview(); // scatter also drives size uniformity,
+                                              // which the preview does show
   });
 
   function updateThresholdLabel(){ els.thresholdVal.textContent = threshold; }
