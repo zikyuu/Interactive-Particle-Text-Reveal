@@ -29,7 +29,17 @@ This repo ships both, side by side, as a small case study in the same problem (s
 
 ## Studio
 
-[`studio.html`](https://zikyuu.github.io/Interactive-Particle-Text-Reveal/studio.html) generalizes the effect into a small tool: type your own text or upload an image, tune detail/threshold, pick a particle style (circle, cross-stitch, or star), and generate a sweep-to-reveal from it. Same engine as `index.html` underneath — the sampling step just also accepts an uploaded image (grayscale + threshold instead of text alpha) in addition to typed text, and particle count is auto-capped so a large image doesn't tank performance.
+[`studio.html`](https://zikyuu.github.io/Interactive-Particle-Text-Reveal/studio.html) generalizes the effect into a small tool: type your own text or upload an image, tune density/particle size/scatter (and threshold, for images), pick a particle style (circle, cross-stitch, or star), and generate a sweep-to-reveal from it. Same underlying sampling technique as `index.html` — it just also accepts an uploaded image (grayscale + threshold instead of text alpha) in addition to typed text, and particle count is auto-capped so a large image doesn't tank performance.
+
+Unlike `index.html`/`approaches.html` (each a single self-contained file), Studio is split into real ES modules under `js/`:
+
+- `js/constants.js` — tunable numbers shared across modules
+- `js/text-sampler.js` — text → point cloud
+- `js/image-sampler.js` — uploaded image → point cloud
+- `js/renderer.js` — pure drawing + particle-placement functions (no shared state)
+- `js/studio.js` — app state, DOM wiring, and the capture/animation engine; imports the four above
+
+Plain browser `import`/`export`, no bundler or build step — just more files instead of one big one.
 
 ## Using a custom font
 
@@ -60,8 +70,10 @@ python3 -m http.server 8000
 # then open http://localhost:8000/index.html
 ```
 
+`index.html` and `approaches.html` also work opened directly as a `file://` URL (double-click). `studio.html` does not — browsers block ES module `import` over `file://` for security, so it needs an actual server (the command above is enough).
+
 ## Files
 
 - `index.html` — the main demo (Approach B, priority queue)
 - `approaches.html` — both approaches side by side, with code snippets and a comparison table
-- `studio.html` — generate a reveal from your own text or image
+- `studio.html` + `js/` + `css/` — generate a reveal from your own text or image
