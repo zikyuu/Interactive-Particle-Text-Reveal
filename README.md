@@ -2,7 +2,7 @@
 
 A dust field that assembles into a name as the cursor sweeps across it — built with vanilla Canvas 2D, no dependencies.
 
-**[Live demo](https://zikyuu.github.io/Interactive-Particle-Text-Reveal/)** · **[Approach A vs B + learning notes](https://zikyuu.github.io/Interactive-Particle-Text-Reveal/approaches.html)**
+**[Live demo](https://zikyuu.github.io/Interactive-Particle-Text-Reveal/)** · **[Approach A vs B + learning notes](https://zikyuu.github.io/Interactive-Particle-Text-Reveal/approaches.html)** · **[Studio — try your own text/image](https://zikyuu.github.io/Interactive-Particle-Text-Reveal/studio.html)**
 
 > Note: the interactive version only runs on the links above (GitHub Pages) — GitHub sanitizes `<script>` tags out of rendered READMEs, so it can't run inline on this page.
 
@@ -26,6 +26,10 @@ This repo ships both, side by side, as a small case study in the same problem (s
 **Approach A** tags every particle with its destination letter up front and only lets the *current* letter's particles react — simple to reason about, but most of the dust you sweep over at any given moment can't respond, which reads as unresponsive.
 
 **Approach B** fixes that: particles are anonymous until capture. Every letter-slot the name needs is pre-sorted once into a priority queue (mostly by letter order, with jitter so adjacent letters blend instead of hard-cutting), and a captured particle just pops whatever's next off that queue. Nearly any dust you touch is useful, and swept areas visibly empty out. `index.html` runs this version; both live side by side in `approaches.html`.
+
+## Studio
+
+[`studio.html`](https://zikyuu.github.io/Interactive-Particle-Text-Reveal/studio.html) generalizes the effect into a small tool: type your own text or upload an image, tune detail/threshold, pick a particle style (circle, cross-stitch, or star), and generate a sweep-to-reveal from it. Same engine as `index.html` underneath — the sampling step just also accepts an uploaded image (grayscale + threshold instead of text alpha) in addition to typed text, and particle count is auto-capped so a large image doesn't tank performance.
 
 ## Using a custom font
 
@@ -60,7 +64,4 @@ python3 -m http.server 8000
 
 - `index.html` — the main demo (Approach B, priority queue)
 - `approaches.html` — both approaches side by side, with code snippets and a comparison table
-
-## License
-
-MIT
+- `studio.html` — generate a reveal from your own text or image
