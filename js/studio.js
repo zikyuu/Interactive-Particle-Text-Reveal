@@ -16,12 +16,16 @@ var particleSize = 2.5; // base radius in px — independent of density
 var scatterPct = 100;   // 0 = uniform grid + uniform size, 100 = fully random
 var threshold = 150;
 var invert = false;
+var shapeScale = 1;     // 0.1..1 — how much of the frame the shape fills
+var posX = 0.5;         // 0..1 — horizontal position, 0.5 = centered
+var posY = 0.5;         // 0..1 — vertical position, 0.5 = centered
 
 var els = {};
 ["modeTextBtn","modeImageBtn","textField","textInput","imageField","dropzone",
  "dropzoneEmpty","dropzonePreviewImg","fileInput","densitySlider","densityVal",
  "sizeSlider","sizeVal","scatterSlider","scatterVal",
  "thresholdField","thresholdSlider","thresholdVal","invertCheck","generateBtn",
+ "scaleSlider","scaleVal","posXSlider","posXVal","posYSlider","posYVal",
  "previewCanvas","previewCount","configStage","playStage","playCanvas","playPct",
  "rescatterBtn","backBtn"
 ].forEach(function(id){ els[id] = document.getElementById(id); });
@@ -31,11 +35,12 @@ var els = {};
 function samplePoints(w, h){
   var baseStep = Math.max(2, Math.round(12 - density)); // density 10 -> step 2, density 1 -> step 11
   var step = baseStep;
+  var offsetX = (posX - 0.5) * 2, offsetY = (posY - 0.5) * 2; // 0..1 -> -1..1
   var pts = [];
   for (var attempt = 0; attempt < 6; attempt++){
     pts = mode === "text"
-      ? sampleTextPoints(els.textInput.value.toUpperCase(), w, h, step)
-      : (uploadedImg ? sampleImagePoints(uploadedImg, w, h, step, threshold, invert) : []);
+      ? sampleTextPoints(els.textInput.value.toUpperCase(), w, h, step, shapeScale, offsetX, offsetY)
+      : (uploadedImg ? sampleImagePoints(uploadedImg, w, h, step, threshold, invert, shapeScale, offsetX, offsetY) : []);
     if (pts.length <= MAX_PARTICLES || step > 40) break;
     step = Math.ceil(step * Math.sqrt(pts.length / MAX_PARTICLES));
   }
@@ -248,6 +253,24 @@ els.scatterSlider.addEventListener("input", function(){
                                             // which the preview does show
 });
 
+function updateScaleLabel(){ els.scaleVal.textContent = Math.round(shapeScale * 100) + "%"; }
+els.scaleSlider.addEventListener("input", function(){
+  shapeScale = parseInt(els.scaleSlider.value, 10) / 100;
+  updateScaleLabel(); schedulePreview();
+});
+
+function updatePosXLabel(){ els.posXVal.textContent = posX === 0.5 ? "Centered" : Math.round(posX * 100) + "%"; }
+els.posXSlider.addEventListener("input", function(){
+  posX = parseInt(els.posXSlider.value, 10) / 100;
+  updatePosXLabel(); schedulePreview();
+});
+
+function updatePosYLabel(){ els.posYVal.textContent = posY === 0.5 ? "Centered" : Math.round(posY * 100) + "%"; }
+els.posYSlider.addEventListener("input", function(){
+  posY = parseInt(els.posYSlider.value, 10) / 100;
+  updatePosYLabel(); schedulePreview();
+});
+
 function updateThresholdLabel(){ els.thresholdVal.textContent = threshold; }
 els.thresholdSlider.addEventListener("input", function(){
   threshold = parseInt(els.thresholdSlider.value, 10);
@@ -303,5 +326,6 @@ window.addEventListener("resize", function(){
 });
 
 // ---- init ----
-updateDensityLabel(); updateSizeLabel(); updateScatterLabel(); updateThresholdLabel();
+updateDensityLabel(); updateSizeLabel(); updateScatterLabel();
+updateScaleLabel(); updatePosXLabel(); updatePosYLabel(); updateThresholdLabel();
 renderPreview();

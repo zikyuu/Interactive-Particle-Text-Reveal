@@ -72,6 +72,24 @@
         </div>
       </div>
 
+      <details class="advanced">
+        <summary>Additional settings</summary>
+        <div class="advanced-body">
+          <div class="field">
+            <div class="row-val"><label for="scaleSlider">Scale</label><span id="scaleVal"></span></div>
+            <input id="scaleSlider" type="range" min="10" max="100" value="100" step="5">
+          </div>
+          <div class="field">
+            <div class="row-val"><label for="posXSlider">Horizontal position</label><span id="posXVal"></span></div>
+            <input id="posXSlider" type="range" min="0" max="100" value="50" step="5">
+          </div>
+          <div class="field">
+            <div class="row-val"><label for="posYSlider">Vertical position</label><span id="posYVal"></span></div>
+            <input id="posYSlider" type="range" min="0" max="100" value="50" step="5">
+          </div>
+        </div>
+      </details>
+
       <button class="primary" id="generateBtn" type="button">Generate</button>
     </div>
 
