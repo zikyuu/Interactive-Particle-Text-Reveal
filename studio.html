@@ -152,6 +152,11 @@
         <input id="sizeSlider" type="range" min="1" max="8" value="2.5" step="0.25">
       </div>
 
+      <div class="field">
+        <div class="row-val"><label for="scatterSlider">Scatter</label><span id="scatterVal"></span></div>
+        <input id="scatterSlider" type="range" min="0" max="100" value="100" step="5">
+      </div>
+
       <div class="field" id="thresholdField" style="display:none;">
         <div class="row-val"><label for="thresholdSlider">Threshold</label><span id="thresholdVal"></span></div>
         <input id="thresholdSlider" type="range" min="10" max="245" value="150" step="1">
@@ -219,13 +224,14 @@
   var particleStyle = "circle";
   var density = 6;        // 1 (sparse) .. 10 (dense) — sample spacing
   var particleSize = 2.5; // base radius in px — independent of density
+  var scatterPct = 100;   // 0 = uniform grid start, 100 = fully random start
   var threshold = 150;
   var invert = false;
 
   var els = {};
   ["modeTextBtn","modeImageBtn","textField","textInput","imageField","dropzone",
    "dropzoneEmpty","dropzonePreviewImg","fileInput","densitySlider","densityVal",
-   "sizeSlider","sizeVal",
+   "sizeSlider","sizeVal","scatterSlider","scatterVal",
    "thresholdField","thresholdSlider","thresholdVal","invertCheck","generateBtn",
    "previewCanvas","previewCount","configStage","playStage","playCanvas","playPct",
    "rescatterBtn","backBtn"
@@ -235,8 +241,31 @@
   // distribution rather than a narrow uniform range. Independent of density:
   // this only sets each particle's own size, not how many particles exist.
   function randomParticleSize(){
+    var f = scatterPct / 100;
+    if (f <= 0) return particleSize; // 0% scatter = perfectly uniform size too
     var t = Math.pow(Math.random(), 3); // skewed toward 0 = mostly small
-    return particleSize * (0.4 + t * 2.2);
+    var skewed = particleSize * (0.4 + t * 2.2);
+    return particleSize + (skewed - particleSize) * f;
+  }
+
+  // Evenly-spaced grid slot for particle `index` of `total`, sized to fill
+  // w x h roughly proportionally.
+  function gridPosition(index, total, w, h){
+    var cols = Math.max(1, Math.round(Math.sqrt(Math.max(1,total) * w / h)));
+    var rows = Math.max(1, Math.ceil(Math.max(1,total) / cols));
+    var col = index % cols, row = Math.floor(index / cols);
+    return { x: (col+0.5) * (w/cols), y: (row+0.5) * (h/rows) };
+  }
+
+  // Blends between that uniform grid slot (scatter = 0) and a fully
+  // independent random point (scatter = 100) — this is what "Scatter"
+  // controls: how orderly vs. chaotic the field looks before any capture.
+  function scatterHome(index, total, w, h){
+    var grid = gridPosition(index, total, w, h);
+    var f = scatterPct / 100;
+    if (f <= 0) return grid;
+    var rnd = randomIn(w, h);
+    return { x: grid.x + (rnd.x-grid.x)*f, y: grid.y + (rnd.y-grid.y)*f };
   }
 
   function hexToRgb(hex){
@@ -414,7 +443,7 @@
 
     var particles = [];
     for (var i=0;i<pts.length;i++){
-      var home = randomIn(dims.w, dims.h);
+      var home = scatterHome(i, pts.length, dims.w, dims.h);
       particles.push({
         x:home.x, y:home.y, homeX:home.x, homeY:home.y, tx:null, ty:null,
         captured:false, isAmbient:false,
@@ -424,7 +453,7 @@
     }
     var ambientCount = Math.min(180, Math.round(pts.length*0.3));
     for (var a=0;a<ambientCount;a++){
-      var h2 = randomIn(dims.w, dims.h);
+      var h2 = scatterHome(a, ambientCount, dims.w, dims.h);
       particles.push({
         x:h2.x, y:h2.y, homeX:h2.x, homeY:h2.y, tx:null, ty:null,
         captured:false, isAmbient:true,
@@ -525,8 +554,12 @@
 
   els.rescatterBtn.addEventListener("click", function(){
     if (!play) return;
-    play.particles.forEach(function(p){
-      if (p.captured){ var h=randomIn(play.dims.w, play.dims.h); p.homeX=h.x; p.homeY=h.y; }
+    var shapeCount = play.slots.length; // only shape particles are ever captured
+    play.particles.forEach(function(p, idx){
+      if (p.captured){
+        var h = scatterHome(idx, shapeCount, play.dims.w, play.dims.h);
+        p.homeX=h.x; p.homeY=h.y;
+      }
       p.captured=false; p.tx=null; p.ty=null;
     });
     play.nextSlotIndex = 0;
@@ -574,6 +607,13 @@
   els.sizeSlider.addEventListener("input", function(){
     particleSize = parseFloat(els.sizeSlider.value);
     updateSizeLabel(); schedulePreview();
+  });
+
+  function updateScatterLabel(){ els.scatterVal.textContent = scatterPct + "%"; }
+  els.scatterSlider.addEventListener("input", function(){
+    scatterPct = parseInt(els.scatterSlider.value, 10);
+    updateScatterLabel(); // affects the play stage's starting layout only,
+                           // not the point-cloud preview — nothing to redraw here
   });
 
   function updateThresholdLabel(){ els.thresholdVal.textContent = threshold; }
@@ -631,7 +671,7 @@
   });
 
   // ---- init ----
-  updateDensityLabel(); updateSizeLabel(); updateThresholdLabel();
+  updateDensityLabel(); updateSizeLabel(); updateScatterLabel(); updateThresholdLabel();
   renderPreview();
 })();
 </script>
